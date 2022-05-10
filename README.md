@@ -1,6 +1,6 @@
 # Yolo v4, v3 and v2 for Windows and Linux
 
-## (neural networks for object detection)
+## (neural networks for object detection) with VTA
 
 Paper YOLO v4: https://arxiv.org/abs/2004.10934
 
