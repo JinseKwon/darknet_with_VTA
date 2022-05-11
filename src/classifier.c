@@ -13,7 +13,8 @@
 #include <sys/time.h>
 #endif
 
-float validate_classifier_single(char *datacfg, char *filename, char *weightfile, network *existing_net, int topk_custom);
+float validate_classifier_single(char *datacfg, char *filename, char *weightfile, network *existing_net, int topk_custom,
+                                int img_rng, float* mean, float* var);
 
 float *get_regression_values(char **labels, int n)
 {
@@ -197,7 +198,11 @@ void train_classifier(char *datacfg, char *cfgfile, char *weightfile, int *gpus,
                 sprintf(topk_buff, "Contr");
             }
             else {
-                topk = validate_classifier_single(datacfg, cfgfile, weightfile, &net, topk_data); // calc TOP-n
+                int img_rng = 1;
+                float img_mean[3] = {0.0f, 0.0f, 0.0f};
+                float img_var[3]  = {1.0f, 1.0f, 1.0f};
+                topk = validate_classifier_single(datacfg, cfgfile, weightfile, &net, topk_data, // calc TOP-n
+                                                img_rng, img_mean, img_var); 
                 printf("\n accuracy %s = %f \n", topk_buff, topk);
             }
             draw_precision = 1;
@@ -589,7 +594,8 @@ void validate_classifier_full(char *datacfg, char *filename, char *weightfile)
 }
 
 
-float validate_classifier_single(char *datacfg, char *filename, char *weightfile, network *existing_net, int topk_custom)
+float validate_classifier_single(char *datacfg, char *filename, char *weightfile, network *existing_net, int topk_custom,
+                                int img_rng, float* mean, float* var)
 {
     int i, j;
     network net;
@@ -645,6 +651,24 @@ float validate_classifier_single(char *datacfg, char *filename, char *weightfile
         image im = load_image_color(paths[i], 0, 0);
         image resized = resize_min(im, net.w);
         image crop = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
+        
+        int h,w;
+        h = net.h;
+        w = net.w;
+        for(int j=0;j<h;j++){
+            for(int z=0;z<w;z++){
+                float rr = crop.data[ 0*h*w + j*w + z]*(float)img_rng;
+                float gg = crop.data[ 1*h*w + j*w + z]*(float)img_rng;
+                float bb = crop.data[ 2*h*w + j*w + z]*(float)img_rng;
+                rr = (rr - mean[0])/var[0];
+                gg = (gg - mean[1])/var[1];
+                bb = (bb - mean[2])/var[2];
+                crop.data[ 0*h*w + j*w + z] = rr;
+                crop.data[ 1*h*w + j*w + z] = gg;
+                crop.data[ 2*h*w + j*w + z] = bb;
+            }
+        }
+        
         //show_image(im, "orig");
         //show_image(crop, "cropped");
         //cvWaitKey(0);
@@ -823,7 +847,8 @@ void try_classifier(char *datacfg, char *cfgfile, char *weightfile, char *filena
     free(indexes);
 }
 
-void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *filename, int top)
+void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *filename, int top,
+                        int img_rng, float* mean, float* var)
 {
     network net = parse_network_cfg_custom(cfgfile, 1, 0);
     if(weightfile){
@@ -871,6 +896,23 @@ void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *fi
         image resized = resize_min(im, net.w);
         image cropped = crop_image(resized, (resized.w - net.w)/2, (resized.h - net.h)/2, net.w, net.h);
         printf("%d %d\n", cropped.w, cropped.h);
+
+        int h,w;
+        h = net.h;
+        w = net.w;
+        for(int j=0;j<h;j++){
+            for(int z=0;z<w;z++){
+                float rr = cropped.data[ 0*h*w + j*w + z]*(float)img_rng;
+                float gg = cropped.data[ 1*h*w + j*w + z]*(float)img_rng;
+                float bb = cropped.data[ 2*h*w + j*w + z]*(float)img_rng;
+                rr = (rr - mean[0])/var[0];
+                gg = (gg - mean[1])/var[1];
+                bb = (bb - mean[2])/var[2];
+                cropped.data[ 0*h*w + j*w + z] = rr;
+                cropped.data[ 1*h*w + j*w + z] = gg;
+                cropped.data[ 2*h*w + j*w + z] = bb;
+            }
+        }
 
         float *X = cropped.data;
 
@@ -1392,6 +1434,11 @@ void run_classifier(int argc, char **argv)
     int cam_index = find_int_arg(argc, argv, "-c", 0);
     int top = find_int_arg(argc, argv, "-t", 0);
     int clear = find_arg(argc, argv, "-clear");
+    int img_rng = find_int_arg(argc, argv, "-img_range", 1);
+    float img_mean[3] = {0.0f, 0.0f, 0.0f};
+                        find_float3_arg(argc, argv, "-mean", img_mean);
+    float img_var[3]  = {1.0f, 1.0f, 1.0f};
+                        find_float3_arg(argc, argv, "-var", img_mean);
     char *data = argv[3];
     char *cfg = argv[4];
     char *weights = (argc > 5) ? argv[5] : 0;
@@ -1399,7 +1446,7 @@ void run_classifier(int argc, char **argv)
     char *layer_s = (argc > 7) ? argv[7]: 0;
     int layer = layer_s ? atoi(layer_s) : -1;
     char* chart_path = find_char_arg(argc, argv, "-chart", 0);
-    if(0==strcmp(argv[2], "predict")) predict_classifier(data, cfg, weights, filename, top);
+    if(0==strcmp(argv[2], "predict")) predict_classifier(data, cfg, weights, filename, top, img_rng, img_mean, img_var);
     else if(0==strcmp(argv[2], "try")) try_classifier(data, cfg, weights, filename, atoi(layer_s));
     else if(0==strcmp(argv[2], "train")) train_classifier(data, cfg, weights, gpus, ngpus, clear, dontuse_opencv, dont_show, mjpeg_port, calc_topk, show_imgs, chart_path);
     else if(0==strcmp(argv[2], "demo")) demo_classifier(data, cfg, weights, cam_index, filename, benchmark, benchmark_layers);
@@ -1407,7 +1454,7 @@ void run_classifier(int argc, char **argv)
     else if(0==strcmp(argv[2], "threat")) threat_classifier(data, cfg, weights, cam_index, filename);
     else if(0==strcmp(argv[2], "test")) test_classifier(data, cfg, weights, layer);
     else if(0==strcmp(argv[2], "label")) label_classifier(data, cfg, weights);
-    else if(0==strcmp(argv[2], "valid")) validate_classifier_single(data, cfg, weights, NULL, -1);
+    else if(0==strcmp(argv[2], "valid")) validate_classifier_single(data, cfg, weights, NULL, -1, img_rng, img_mean, img_var);
     else if(0==strcmp(argv[2], "validmulti")) validate_classifier_multi(data, cfg, weights);
     else if(0==strcmp(argv[2], "valid10")) validate_classifier_10(data, cfg, weights);
     else if(0==strcmp(argv[2], "validcrop")) validate_classifier_crop(data, cfg, weights);

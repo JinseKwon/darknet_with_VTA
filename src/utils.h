@@ -86,6 +86,7 @@ float sec(clock_t clocks);
 int find_int_arg(int argc, char **argv, char *arg, int def);
 float find_float_arg(int argc, char **argv, char *arg, float def);
 int find_arg(int argc, char* argv[], char *arg);
+void find_float3_arg(int argc, char **argv, char *arg, float *def);
 char *find_char_arg(int argc, char **argv, char *arg, char *def);
 int sample_array(float *a, int n);
 int sample_array_custom(float *a, int n);

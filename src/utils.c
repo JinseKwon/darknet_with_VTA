@@ -118,6 +118,23 @@ int find_arg(int argc, char* argv[], char *arg)
     }
     return 0;
 }
+void find_float3_arg(int argc, char **argv, char *arg, float *def)
+{
+    int i;
+    for(i = 0; i < argc-1; ++i){
+        if(!argv[i]) continue;
+        if(0==strcmp(argv[i], arg)){
+            def[0] = atof(argv[i+1]);
+            def[1] = atof(argv[i+2]);
+            def[2] = atof(argv[i+3]);
+            del_arg(argc, argv, i);
+            del_arg(argc, argv, i);
+            del_arg(argc, argv, i);
+            del_arg(argc, argv, i);
+            break;
+        }
+    }
+}
 
 int find_int_arg(int argc, char **argv, char *arg, int def)
 {
