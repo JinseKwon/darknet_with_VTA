@@ -1,0 +1,8 @@
+classes=1000
+train  = data/imagenet/imagenet1k.train.list
+valid  = data/imagenet1k.val.list
+backup = backup/
+labels = data/caffe_imagenet.labels.list
+names  = data/caffe_imagenet.shortnames.list
+top=5
+

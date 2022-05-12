@@ -13,7 +13,7 @@
 *.cfg
 *.weights
 mnist/
-data/
+#data/
 caffe/
 grasp/
 images/
@@ -21,7 +21,7 @@ opencv/
 convnet/
 decaf/
 submission/
-cfg/
+#cfg/
 temp/
 build/darknet/*
 build_*/
