@@ -87,6 +87,19 @@ void gemm_nn_bin_transposed_32bit_packed(int M, int N, int K, float ALPHA,
 void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, int w, int h, int out_w, int out_h, int c,
     int pad, int stride, int batch);
 
+#ifdef VTA
+void gemm_vta(int TA, int TB, int M, int N, int K, float ALPHA,
+        float *A, int lda,
+        int is_quant, 
+        int8_t *A_q, float A_scale,
+        float *B, int ldb,
+        float BETA,
+        float *C, int ldc, 
+        int layer_num, int shr,
+        void* input_buf,
+        void* weight_buf,
+        void* output_buf);
+#endif
 
 void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
                     float *A, int lda,

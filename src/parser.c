@@ -193,6 +193,10 @@ convolutional_layer parse_convolutional(list *options, size_params params)
     char *activation_s = option_find_str(options, "activation", "logistic");
     ACTIVATION activation = get_activation(activation_s);
 
+    int acc8shift = option_find_int_quiet(options, "int8_shift",-1);
+    float inputscale = option_find_float_quiet(options, "int8_input_scale", 1);
+    float weightscale = option_find_float_quiet(options, "int8_weight_scale", 1);
+
     int assisted_excitation = option_find_float_quiet(options, "assisted_excitation", 0);
 
     int share_index = option_find_int_quiet(options, "share_index", -1000000000);
@@ -237,7 +241,14 @@ convolutional_layer parse_convolutional(list *options, size_params params)
     layer.grad_centr = option_find_int_quiet(options, "grad_centr", 0);
     layer.reverse = option_find_float_quiet(options, "reverse", 0);
     layer.coordconv = option_find_int_quiet(options, "coordconv", 0);
-
+#ifdef VTA
+    layer.q_shr = acc8shift;
+    layer.q_inputs_scale  = inputscale;
+    layer.q_weights_scale = weightscale;
+    // if(acc8shift != -1){
+    layer.is_q_weights = 1;
+    // }
+#endif
     layer.stream = option_find_int_quiet(options, "stream", -1);
     layer.wait_stream_id = option_find_int_quiet(options, "wait_stream", -1);
 

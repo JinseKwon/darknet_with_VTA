@@ -1416,6 +1416,112 @@ void calculate_binary_weights(network net)
     //printf("\n calculate_binary_weights Done! \n");
 
 }
+#ifdef VTA
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+
+#include "vta/runtime.h"
+#include "vta/data_buf.h"
+
+#define RESET_IOCTL _IOWR('X', 101, unsigned long)
+#define EVTA_ID 0
+VTACommandHandle vtaCmdH{nullptr};
+
+void xlnk_reset() {
+  int xlnkfd = open("/dev/xlnk", O_RDWR | O_CLOEXEC);
+  if (xlnkfd < 0) {
+    printf("Reset failed - could not open device: %d\n", xlnkfd);
+    return;
+  }
+  if (ioctl(xlnkfd, RESET_IOCTL, 0) < 0) {
+    printf("Reset failed - IOCTL failed: %d\n", errno);
+  }
+  close(xlnkfd);
+}
+void calculate_int8_weights(network net)
+{
+    int i,j;
+    xlnk_reset();
+    
+    vtaCmdH = VTATLSCommandHandle(EVTA_ID);
+    for (j = 0; j < net.n; ++j) {
+        layer *l = &net.layers[j];
+
+        if (l->type == CONVOLUTIONAL) {
+            if(l->is_q_weights == 1){
+                l->q_weights = (int8_t*)xcalloc(l->nweights, sizeof(int8_t));
+                
+                int m = l->n;
+                int k = l->size  * l->size  * l->c;
+                int n = l->out_h * l->out_w;
+                int input_size = n*k;
+                int weight_size = m*k;
+                int output_size = m*n; 
+
+                l->vta_input_buf  = VTABufferAlloc( input_size );
+                l->vta_weight_buf = VTABufferAlloc( weight_size);
+                l->vta_output_buf = VTABufferAlloc( output_size);
+
+                printf("Convert Convolutional-%3d float to int8t \n", j);
+                float max = 0.0f;
+                float rng = 127.0f;    
+                for (i = 0; i < (l->n * l->c * l->size* l->size ); ++i) {
+                    if(fabs(l->weights[i]) > max){
+                        max = fabs(l->weights[i]);
+                    }
+                }
+                int8_t *weight_temp = (int8_t*)malloc(weight_size);
+
+                l->q_weights_scale = max/rng;
+
+                for(i = 0; i < (l->n * l->c * l->size* l->size ); ++i){
+                    int temp = (l->weights[i] / l->q_weights_scale);
+                    if(temp >  127) temp =  127;
+                    if(temp < -128) temp = -128;
+                    weight_temp[i] = (int8_t)temp;
+                    // l->q_weights[i] = (int8_t)temp;
+                }
+                
+                // #pragma omp parallel for
+                for(int ii = 0 ; ii < m/16; ii++){
+                    for(int jj = 0 ; jj < k/16; jj++){
+                        for(int r = 0; r < 16; r++){
+                            for(int s = 0; s < 16; s++){
+                                int tmp_idx = (ii*16 + r)*k + (jj*16 + s);
+                                int wgt_idx = ii*k/16*16*16 + jj*16*16 + r*16+ s;
+                                l->q_weights[wgt_idx] = weight_temp[tmp_idx];
+                            }
+                        }
+                    }
+                }       
+                free(weight_temp);
+            }
+        }
+    }
+    printf("\n calculate_int8_weights Done! \n");
+
+}
+void free_VTA_int8_weights(network net){
+    int i,j;
+    for (j = 0; j < net.n; ++j) {
+        layer *l = &net.layers[j];
+
+        if (l->type == CONVOLUTIONAL) {
+            if(l->is_q_weights == 1){
+                printf("Free Convolutional-%3d int8_t* \n", j);
+                free(l->q_weights);
+                VTABufferFree( l->vta_input_buf );
+                VTABufferFree( l->vta_output_buf);
+                VTABufferFree( l->vta_weight_buf);
+            }
+        }
+    }
+    printf("\n VTA memory free Done! \n");
+    VTARuntimeShutdown(EVTA_ID);
+}
+#endif
 
 void copy_cudnn_descriptors(layer src, layer *dst)
 {

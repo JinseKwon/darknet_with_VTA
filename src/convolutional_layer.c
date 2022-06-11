@@ -1207,9 +1207,15 @@ size_t binary_transpose_align_input(int k, int n, float *b, char **t_bit_input, 
     return t_intput_size;
 }
 
-
+int conv_counter = 0;
+struct timespec u_time2;
+double get_time2(){
+  clock_gettime(CLOCK_REALTIME, &u_time2);
+  return (u_time2.tv_sec) + (u_time2.tv_nsec) * 1e-9;
+}
 void forward_convolutional_layer(convolutional_layer l, network_state state)
 {
+    double lat = get_time2();    
     int out_h = convolutional_out_height(l);
     int out_w = convolutional_out_width(l);
     int i, j;
@@ -1371,10 +1377,12 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
                 float *im = state.input + (i*l.groups + j)*(l.c / l.groups)*l.h*l.w;
                 if (l.size == 1 && l.stride == 1 && l.dilation == 1) {
                     b = im;
+                }else if(l.size == 1 && l.stride > 1){
+                    im2col_cpu(im, l.c / l.groups, l.h, l.w, l.size, l.stride, l.pad, b);
                 }
                 else {
                     //im2col_cpu(im, l.c / l.groups, l.h, l.w, l.size, l.stride, l.pad, b);
-
+                    
                     im2col_cpu_ext(im,   // input
                         l.c / l.groups,     // input channels
                         l.h, l.w,           // input size (h, w)
@@ -1385,8 +1393,20 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
                         b);                 // output
 
                 }
-
+#ifdef VTA
+                gemm_vta(0, 0, m, n, k, 1, 
+                        a, k, 
+                        l.is_q_weights, 
+                        l.q_weights, l.q_weights_scale,
+                        b, n, 
+                        0,
+                        c, n, conv_counter++, l.q_shr,
+                        l.vta_input_buf,
+                        l.vta_weight_buf,
+                        l.vta_output_buf);
+#else
                 gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
+#endif
                 // bit-count to float
             }
             //c += n*m;
@@ -1412,7 +1432,7 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
 
     if(l.binary || l.xnor) swap_binary(&l);
 
-    //visualize_convolutional_layer(l, "conv_visual", NULL);
+    // visualize_convolutional_layer(l, "conv_visual", NULL);
     //wait_until_press_key_cv();
 
     if(l.assisted_excitation && state.train) assisted_excitation_forward(l, state);
@@ -1427,6 +1447,7 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
         //simple_copy_ongpu(l.outputs*l.batch, l.output, l.input_antialiasing);
         memcpy(l.output, l.input_layer->output, l.input_layer->outputs * l.input_layer->batch * sizeof(float));
     }
+    printf("%d conv : %lf\n",conv_counter-1,get_time2()-lat);
 }
 
 void assisted_excitation_forward(convolutional_layer l, network_state state)

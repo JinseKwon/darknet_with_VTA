@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "im2col.h"
 #include "dark_cuda.h"
+#include "gemm_vta.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -106,6 +107,39 @@ void time_random_matrix(int TA, int TB, int m, int k, int n)
     free(c);
 }
 
+#ifdef VTA
+void gemm_vta(int TA, int TB, int M, int N, int K, float ALPHA,
+        float *A, int lda,
+        int is_quant, 
+        int8_t *A_q, float A_scale,
+        float *B, int ldb,
+        float BETA,
+        float *C, int ldc, 
+        int layer_num, int shr,
+        void* input_buf,
+        void* weight_buf,
+        void* output_buf)
+{
+    printf("conv %2d : ",layer_num);
+
+    if(M % 16 == 0 && N % 16 == 0 && K %16 ==0 && layer_num < 20){
+
+        vta_gemm( TA,  TB,  M, K, N, ALPHA,
+        // vta_gemm_cpu( TA,  TB,  M, K, N, ALPHA,
+                    A,lda, 
+                    is_quant,
+                    A_q, A_scale,
+                    B, ldb,
+                    BETA,
+                    C,ldc,
+                    layer_num, shr,
+                    input_buf, weight_buf, output_buf);
+    }else{
+        printf("CPU_gemm \n");
+        gemm_cpu( TA,  TB,  M, N, K, ALPHA,A,lda, B, ldb,BETA,C,ldc);
+    }
+}
+#endif
 
 void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A, int lda,
@@ -2646,7 +2680,7 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
             }
         }
     }
-
+    // printf("hello gemm cpu\n");
     is_avx();   // initialize static variable
     if (is_fma_avx2() && !TA && !TB) {
         gemm_nn_fast(M, N, K, ALPHA, A, lda, B, ldb, C, ldc);

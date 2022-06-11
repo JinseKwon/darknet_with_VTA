@@ -16,6 +16,11 @@
 #include <assert.h>
 #include <pthread.h>
 
+#ifdef VTA
+#include "vta/runtime.h"
+#include "vta/data_buf.h"
+#endif
+
 #ifndef LIB_API
 #ifdef LIB_EXPORTS
 #if defined(_MSC_VER)
@@ -421,6 +426,17 @@ struct layer {
 
     float *weights;
     float *weight_updates;
+
+    int   is_q_weights = 0;
+    int8_t  *q_weights;
+    float    q_weights_scale;
+    int8_t  *q_inputs;
+    float    q_inputs_scale;
+    int      q_shr;
+
+    void* vta_input_buf;
+    void* vta_weight_buf;
+    void* vta_output_buf;
 
     float scale_x_y;
     int objectness_smooth;
@@ -1038,6 +1054,8 @@ LIB_API void free_detections(detection *dets, int n);
 LIB_API void free_batch_detections(det_num_pair *det_num_pairs, int n);
 LIB_API void fuse_conv_batchnorm(network net);
 LIB_API void calculate_binary_weights(network net);
+LIB_API void calculate_int8_weights(network net);
+LIB_API void free_VTA_int8_weights(network net);
 LIB_API char *detection_to_json(detection *dets, int nboxes, int classes, char **names, long long int frame_id, char *filename);
 
 LIB_API layer* get_network_layer(network* net, int i);

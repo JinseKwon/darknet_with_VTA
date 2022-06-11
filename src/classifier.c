@@ -859,6 +859,9 @@ void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *fi
 
     fuse_conv_batchnorm(net);
     calculate_binary_weights(net);
+#ifdef VTA
+    calculate_int8_weights(net);
+#endif
 
     list *options = read_data_cfg(datacfg);
 
@@ -937,6 +940,7 @@ void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *fi
 
         if (filename) break;
     }
+    free_VTA_int8_weights(net);
     free(indexes);
     free_network(net);
     free_list_contents_kvp(options);
